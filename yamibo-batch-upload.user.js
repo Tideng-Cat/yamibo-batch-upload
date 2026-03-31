@@ -485,7 +485,10 @@
       actions.appendChild(createOutputButton('Bottom', 'bottom', index, index === state.outputItems.length - 1));
       actions.appendChild(createOutputButton('Up', 'up', index, index === 0));
       actions.appendChild(createOutputButton('Down', 'down', index, index === state.outputItems.length - 1));
-      actions.appendChild(createOutputButton('Delete', 'delete', index, false));
+      const deleteBtn = createOutputButton('Delete', 'delete', index, false);
+      deleteBtn.style.background = 'rgba(153, 27, 27, 0.88)';
+      deleteBtn.style.color = '#fff';
+      actions.appendChild(deleteBtn);
       meta.appendChild(name);
       meta.appendChild(tag);
       row.appendChild(meta);
@@ -1064,7 +1067,7 @@
             <div id="${PANEL_ID}-output-list" class="gmyb-output-list gmyb-grow"></div>
             <div class="gmyb-actions">
               <button id="${PANEL_ID}-sort" type="button" class="gmyb-secondary">Sort by Original Filename</button>
-              <button id="${PANEL_ID}-delete-images" type="button" class="gmyb-secondary">Delete All Uploaded Images</button>
+              <button id="${PANEL_ID}-delete-images" type="button" class="gmyb-secondary" style="background: rgba(153, 27, 27, 0.88); color: #fff;">Delete All Uploaded Images</button>
             </div>
             <div class="gmyb-muted">Rows show the original filename. Reorder here first.</div>
           </div>
