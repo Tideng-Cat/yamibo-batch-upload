@@ -233,7 +233,7 @@
       #${PANEL_ID} .gmyb-output-actions {
         display: grid;
         gap: 6px;
-        grid-template-columns: repeat(2, minmax(52px, 1fr));
+        grid-template-columns: repeat(3, minmax(52px, 1fr));
         align-self: center;
       }
 
@@ -485,6 +485,7 @@
       actions.appendChild(createOutputButton('Bottom', 'bottom', index, index === state.outputItems.length - 1));
       actions.appendChild(createOutputButton('Up', 'up', index, index === 0));
       actions.appendChild(createOutputButton('Down', 'down', index, index === state.outputItems.length - 1));
+      actions.appendChild(createOutputButton('Delete', 'delete', index, false));
       meta.appendChild(name);
       meta.appendChild(tag);
       row.appendChild(meta);
@@ -514,6 +515,27 @@
 
     const moved = state.outputItems.splice(index, 1)[0];
     state.outputItems.splice(targetIndex, 0, moved);
+    renderOutputItems();
+  }
+
+  function deleteOutputItem(index) {
+    if (index < 0 || index >= state.outputItems.length) {
+      return;
+    }
+
+    const item = state.outputItems[index];
+    const aid = Number(item && item.aid);
+    const fileName = (item && item.fileName) || ('Image ' + (index + 1));
+
+    if (Number.isInteger(aid) && aid > 0 && typeof window.delImgAttach === 'function') {
+      window.delImgAttach(aid, 1);
+      log(`Deleted uploaded image: ${fileName}`);
+      scheduleRefresh();
+    } else {
+      log(`Removed image from list: ${fileName}`);
+    }
+
+    state.outputItems.splice(index, 1);
     renderOutputItems();
   }
 
@@ -555,6 +577,61 @@
     state.outputItems = [];
     renderOutputItems();
     log('Cleared generated tags.');
+  }
+
+  function collectUploadedImageIdsFromPage() {
+    return Array.from(document.querySelectorAll('[id^="image_td_"]'))
+      .map(function (node) {
+        const match = node.id.match(/^image_td_(\d+)$/);
+        if (!match || node.classList.contains('imgdeleted')) {
+          return null;
+        }
+        return Number(match[1]);
+      })
+      .filter(function (id) {
+        return Number.isInteger(id) && id > 0;
+      });
+  }
+
+  function deleteAllUploadedImages() {
+    if (typeof window.delImgAttach !== 'function') {
+      log('Delete failed: delImgAttach is not available on this page yet.');
+      return;
+    }
+
+    const aidSet = new Set(
+      state.outputItems
+        .map(function (item) {
+          return Number(item.aid);
+        })
+        .filter(function (aid) {
+          return Number.isInteger(aid) && aid > 0;
+        })
+    );
+
+    collectUploadedImageIdsFromPage().forEach(function (aid) {
+      aidSet.add(aid);
+    });
+
+    if (!aidSet.size) {
+      log('No uploaded images to delete.');
+      return;
+    }
+
+    if (!window.confirm(`Delete all ${aidSet.size} uploaded image(s)? This cannot be undone.`)) {
+      log('Delete all uploaded images cancelled.');
+      return;
+    }
+
+    const ids = {};
+    aidSet.forEach(function (aid) {
+      ids[aid] = aid;
+    });
+
+    window.delImgAttach(ids, 1);
+    clearOutputItems();
+    log(`Deleted ${aidSet.size} uploaded image(s).`);
+    scheduleRefresh();
   }
 
   function startPanelResize(event) {
@@ -987,6 +1064,7 @@
             <div id="${PANEL_ID}-output-list" class="gmyb-output-list gmyb-grow"></div>
             <div class="gmyb-actions">
               <button id="${PANEL_ID}-sort" type="button" class="gmyb-secondary">Sort by Original Filename</button>
+              <button id="${PANEL_ID}-delete-images" type="button" class="gmyb-secondary">Delete All Uploaded Images</button>
             </div>
             <div class="gmyb-muted">Rows show the original filename. Reorder here first.</div>
           </div>
@@ -1020,6 +1098,7 @@
       pick: panel.querySelector('#' + PANEL_ID + '-pick'),
       copy: panel.querySelector('#' + PANEL_ID + '-copy'),
       sort: panel.querySelector('#' + PANEL_ID + '-sort'),
+      deleteImages: panel.querySelector('#' + PANEL_ID + '-delete-images'),
       clearOutput: panel.querySelector('#' + PANEL_ID + '-clear-output'),
       clear: panel.querySelector('#' + PANEL_ID + '-clear'),
       outputList: panel.querySelector('#' + PANEL_ID + '-output-list'),
@@ -1063,6 +1142,7 @@
         down: function () { moveOutputItem(index, 1); },
         top: function () { moveOutputItemTo(index, 0); },
         bottom: function () { moveOutputItemTo(index, state.outputItems.length - 1); },
+        delete: function () { deleteOutputItem(index); },
       };
 
       if (actions[button.dataset.action]) {
@@ -1097,6 +1177,10 @@
 
     state.elements.sort.addEventListener('click', function () {
       sortOutputItemsByFileName();
+    });
+
+    state.elements.deleteImages.addEventListener('click', function () {
+      deleteAllUploadedImages();
     });
 
     state.elements.clear.addEventListener('click', function () {
