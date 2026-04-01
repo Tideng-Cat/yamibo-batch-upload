@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Yamibo Batch Upload
 // @namespace    https://bbs.yamibo.com/userscripts
-// @version      0.5.3
-// @description  Adds batch file selection to Yamibo's attachment uploader (Buttons moved to top).
+// @version      0.5.6
+// @description  Adds batch file selection to Yamibo's attachment uploader (Original dimensions, dynamic quality compression).
 // @match        https://bbs.yamibo.com/forum.php*
 // @run-at       document-idle
 // @grant        none
@@ -17,6 +17,7 @@
   const MAX_RETRIES = 2;
   const MIN_PANEL_WIDTH = 420;
   const MIN_PANEL_HEIGHT = 360;
+  const MAX_FILE_SIZE_MB = 4.8; 
 
   const state = {
     logLines: [],
@@ -56,7 +57,6 @@
       window.showDialog(message, type || 'notice', null, null, 0, null, null, null, null, 6);
       return;
     }
-
     window.alert(message);
   }
 
@@ -139,6 +139,14 @@
         min-height: 0;
       }
 
+      #${PANEL_ID} .gmyb-col-upload {
+        grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+      }
+      
+      #${PANEL_ID} .gmyb-log-row {
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
       #${PANEL_ID} .gmyb-col-fill {
         grid-template-rows: auto auto minmax(0, 1fr) auto auto;
       }
@@ -157,21 +165,6 @@
         gap: 6px;
       }
 
-      #${PANEL_ID} .gmyb-col-upload {
-        grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
-      }
-      
-      #${PANEL_ID} .gmyb-log-row {
-        grid-template-rows: auto minmax(0, 1fr);
-      }
-
-      #${PANEL_ID} .gmyb-col-fill {
-        grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-      }
-
-      #${PANEL_ID} .gmyb-col-copy {
-        grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-      }
       #${PANEL_ID} .gmyb-muted,
       #${PANEL_ID} .gmyb-stats {
         color: #bfd1ee;
@@ -292,6 +285,10 @@
           height: auto;
         }
 
+        #${PANEL_ID} .gmyb-col-upload {
+          grid-template-rows: auto auto auto auto minmax(200px, auto) auto;
+        }
+
         #${PANEL_ID} .gmyb-col-fill {
           grid-template-rows: auto auto minmax(220px, auto) auto auto;
         }
@@ -303,6 +300,78 @@
     `;
 
     document.head.appendChild(style);
+  }
+
+  function compressImage(file) {
+    return new Promise((resolve) => {
+      const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+      
+      if (file.size <= maxBytes) {
+        return resolve(file);
+      }
+
+      if (file.type === 'image/gif') {
+        log(`Warning: ${file.name} is a GIF and over 5MB. Auto-compression skipped (would break animation).`);
+        return resolve(file);
+      }
+
+      log(`Compressing ${file.name} (Original: ${(file.size / 1024 / 1024).toFixed(2)} MB)...`);
+
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        img.src = e.target.result;
+      };
+
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        
+        const width = img.width;
+        const height = img.height;
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressWithQuality = (q) => {
+          return new Promise(resolveBlob => {
+            canvas.toBlob(resolveBlob, 'image/jpeg', q);
+          });
+        };
+
+        let quality = 0.85;
+        let blob = await compressWithQuality(quality);
+
+        while (blob && blob.size > maxBytes && quality > 0.1) {
+          log(`Size ${(blob.size / 1024 / 1024).toFixed(2)} MB still too large. Retrying with lower quality (${Math.round((quality - 0.15) * 100)}%)...`);
+          quality -= 0.15;
+          blob = await compressWithQuality(quality);
+        }
+
+        if (!blob) {
+          log(`Compression failed for ${file.name}, using original.`);
+          return resolve(file);
+        }
+        
+        let newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+        const compressedFile = new File([blob], newName, {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        });
+
+        log(`Successfully compressed ${file.name} to ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB (Dimensions kept at ${width}x${height}).`);
+        resolve(compressedFile);
+      };
+
+      img.onerror = () => {
+        log(`Failed to read image data for ${file.name}, proceeding with original.`);
+        resolve(file);
+      };
+
+      reader.readAsDataURL(file);
+    });
   }
 
   function modeLabel(prefix) {
@@ -1102,6 +1171,7 @@
 
     const panel = document.createElement('section');
     panel.id = PANEL_ID;
+    
     panel.innerHTML = `
       <div class="gmyb-resize" id="${PANEL_ID}-resize" title="Resize panel"></div>
       <div class="gmyb-header">Yamibo Batch Upload</div>
@@ -1194,13 +1264,26 @@
     });
 
     state.elements.pick.addEventListener('click', function () {
-      state.elements.fileInput.accept = state.mode === 'img' ? '.jpg,.jpeg,.gif,.png' : '';
+      state.elements.fileInput.accept = state.mode === 'img' ? '.jpg,.jpeg,.gif,.png,.webp' : '';
       state.elements.fileInput.click();
     });
 
-    state.elements.fileInput.addEventListener('change', function () {
-      queueFiles(state.mode, Array.from(this.files || []));
+    state.elements.fileInput.addEventListener('change', async function () {
+      const files = Array.from(this.files || []);
       this.value = '';
+
+      if (!files.length) return;
+
+      if (state.mode === 'img') {
+        const processedFiles = [];
+        for (const file of files) {
+          const processedFile = await compressImage(file);
+          processedFiles.push(processedFile);
+        }
+        queueFiles(state.mode, processedFiles);
+      } else {
+        queueFiles(state.mode, files);
+      }
     });
 
     state.elements.outputList.addEventListener('click', function (event) {
