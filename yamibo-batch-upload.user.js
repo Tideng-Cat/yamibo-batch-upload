@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Yamibo Batch Upload
 // @namespace    https://bbs.yamibo.com/userscripts
-// @version      0.5.0
-// @description  Adds batch file selection to Yamibo's attachment uploader.
+// @version      0.5.3
+// @description  Adds batch file selection to Yamibo's attachment uploader (Buttons moved to top).
 // @match        https://bbs.yamibo.com/forum.php*
 // @run-at       document-idle
 // @grant        none
@@ -77,8 +77,8 @@
         right: 16px;
         bottom: 16px;
         z-index: 2147483647;
-        width: 880px;
-        height: 540px;
+        width: 880px; 
+        height: 540px; 
         min-width: ${MIN_PANEL_WIDTH}px;
         min-height: ${MIN_PANEL_HEIGHT}px;
         max-width: calc(100vw - 32px);
@@ -143,6 +143,10 @@
         grid-template-rows: auto auto minmax(0, 1fr) auto auto;
       }
 
+      #${PANEL_ID} .gmyb-col-copy {
+        grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+      }
+
       #${PANEL_ID} .gmyb-section-title {
         font-weight: 700;
         color: #eff6ff;
@@ -153,6 +157,21 @@
         gap: 6px;
       }
 
+      #${PANEL_ID} .gmyb-col-upload {
+        grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+      }
+      
+      #${PANEL_ID} .gmyb-log-row {
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+
+      #${PANEL_ID} .gmyb-col-fill {
+        grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+      }
+
+      #${PANEL_ID} .gmyb-col-copy {
+        grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+      }
       #${PANEL_ID} .gmyb-muted,
       #${PANEL_ID} .gmyb-stats {
         color: #bfd1ee;
@@ -275,6 +294,10 @@
 
         #${PANEL_ID} .gmyb-col-fill {
           grid-template-rows: auto auto minmax(220px, auto) auto auto;
+        }
+
+        #${PANEL_ID} .gmyb-col-copy {
+          grid-template-rows: auto auto auto minmax(220px, auto) auto;
         }
       }
     `;
@@ -626,6 +649,7 @@
       renderOutputItems();
     }
   }
+
   function collectUploadedImageIdsFromPage() {
     return Array.from(document.querySelectorAll('[id^="image_td_"]'))
       .map(function (node) {
@@ -1083,7 +1107,8 @@
       <div class="gmyb-header">Yamibo Batch Upload</div>
       <div class="gmyb-body">
         <div class="gmyb-layout">
-          <div class="gmyb-col">
+          
+          <div class="gmyb-col gmyb-col-upload">
             <div class="gmyb-row">
               <div class="gmyb-section-title">1. Upload</div>
               <label for="${PANEL_ID}-mode">Upload target</label>
@@ -1097,14 +1122,17 @@
               <button id="${PANEL_ID}-pick" type="button">Choose Files</button>
             </div>
             <div class="gmyb-muted">Choose files and the site upload queue will start immediately. Failed image uploads are retried automatically.</div>
-            <div class="gmyb-row">
+            
+            <div class="gmyb-row gmyb-log-row">
               <label for="${PANEL_ID}-log">Activity</label>
-              <textarea id="${PANEL_ID}-log" readonly></textarea>
+              <textarea id="${PANEL_ID}-log" class="gmyb-grow" readonly></textarea>
             </div>
+            
             <div class="gmyb-actions">
               <button id="${PANEL_ID}-clear" type="button" class="gmyb-secondary">Clear Log</button>
             </div>
           </div>
+          
           <div class="gmyb-col gmyb-col-fill">
             <div class="gmyb-section-title">2. Arrange</div>
             <label>Uploaded Images</label>
@@ -1115,16 +1143,18 @@
             </div>
             <div class="gmyb-muted">Rows show the original filename. Reorder here first.</div>
           </div>
-          <div class="gmyb-col gmyb-col-fill">
+          
+          <div class="gmyb-col gmyb-col-copy">
             <div class="gmyb-section-title">3. Copy</div>
-            <label for="${PANEL_ID}-output">Generated Tags</label>
-            <textarea id="${PANEL_ID}-output" class="gmyb-grow" spellcheck="false" placeholder="Reorder the uploaded images in the middle, then copy these tags."></textarea>
             <div class="gmyb-actions">
               <button id="${PANEL_ID}-copy" type="button" class="gmyb-secondary">Copy Tags</button>
               <button id="${PANEL_ID}-clear-output" type="button" class="gmyb-secondary">Clear Tags</button>
             </div>
+            <label for="${PANEL_ID}-output">Generated Tags</label>
+            <textarea id="${PANEL_ID}-output" class="gmyb-grow" spellcheck="false" placeholder="Reorder the uploaded images in the middle, then copy these tags."></textarea>
             <div class="gmyb-muted">The tags here always reflect the current order from the middle column.</div>
           </div>
+
         </div>
       </div>
     `;
