@@ -77,8 +77,8 @@
         right: 16px;
         bottom: 16px;
         z-index: 2147483647;
-        width: 1080px;
-        height: 620px;
+        width: 880px;
+        height: 540px;
         min-width: ${MIN_PANEL_WIDTH}px;
         min-height: ${MIN_PANEL_HEIGHT}px;
         max-width: calc(100vw - 32px);
@@ -582,6 +582,50 @@
     log('Cleared generated tags.');
   }
 
+  function loadExistingImages() {
+    const existingNodes = Array.from(document.querySelectorAll('[id^="image_td_"]'));
+    let added = 0;
+
+    existingNodes.forEach(function (node) {
+      const match = node.id.match(/^image_td_(\d+)$/);
+      if (!match || node.classList.contains('imgdeleted')) {
+        return;
+      }
+      
+      const aid = Number(match[1]);
+      if (!Number.isInteger(aid) || aid <= 0) {
+        return;
+      }
+
+      const exists = state.outputItems.some(function (item) {
+        return item.aid === aid;
+      });
+
+      if (!exists) {
+        let fileName = 'Existing Image ' + aid;
+        
+        const titledElem = node.querySelector('[title]');
+        const inputElem = node.querySelector('input.px');
+        
+        if (titledElem && titledElem.title) {
+          fileName = titledElem.title;
+        } else if (inputElem && inputElem.value) {
+          fileName = inputElem.value;
+        }
+
+        state.outputItems.push({
+          aid: aid,
+          fileName: fileName
+        });
+        added++;
+      }
+    });
+
+    if (added > 0) {
+      log(`Loaded ${added} existing image(s) from the page.`);
+      renderOutputItems();
+    }
+  }
   function collectUploadedImageIdsFromPage() {
     return Array.from(document.querySelectorAll('[id^="image_td_"]'))
       .map(function (node) {
@@ -1199,6 +1243,9 @@
     ensureReady(state.mode);
     renderOutputItems();
     refreshStats();
+    
+    loadExistingImages();
+    setInterval(loadExistingImages, 2000);
   }
 
   ensurePanel();
